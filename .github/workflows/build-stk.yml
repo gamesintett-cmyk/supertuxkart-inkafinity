@@ -1,0 +1,38 @@
+name: Build SuperTuxKart
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake git subversion \
+            libsdl2-dev libcurl4-openssl-dev libfreetype6-dev \
+            libharfbuzz-dev libjpeg-dev libogg-dev libopenal-dev \
+            libpng-dev libssl-dev libvorbis-dev libmbedtls-dev \
+            pkg-config zlib1g-dev
+
+      - name: Configure
+        run: |
+          cd stk-code
+          mkdir -p cmake_build
+          cd cmake_build
+          cmake .. -DBUILD_RECORDER=off -DNO_SHADERC=on
+
+      - name: Build
+        run: |
+          cd stk-code/cmake_build
+          make -j2
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: supertuxkart-linux-build
+          path: stk-code/cmake_build/bin/
