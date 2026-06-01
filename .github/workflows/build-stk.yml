@@ -14,6 +14,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake git subversion \
+            libbluetooth-dev \
             libsdl2-dev libcurl4-openssl-dev libfreetype6-dev \
             libharfbuzz-dev libjpeg-dev libogg-dev libopenal-dev \
             libpng-dev libssl-dev libvorbis-dev libmbedtls-dev \
