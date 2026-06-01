@@ -32,8 +32,19 @@ jobs:
           cd stk-code/cmake_build
           make -j2
 
+      - name: Prepare package
+        run: |
+          mkdir -p package
+          cp stk-code/cmake_build/bin/supertuxkart package/
+          cp -r stk-assets package/data
+          cat > package/run_auto_ia.sh << 'EOF'
+          chmod +x ./supertuxkart
+          ./supertuxkart --demo-mode=1 --demo-karts=12 --demo-laps=3
+          EOF
+          chmod +x package/run_auto_ia.sh
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: supertuxkart-linux-build
-          path: stk-code/cmake_build/bin/
+          name: supertuxkart-auto-ia-linux
+          path: package/
