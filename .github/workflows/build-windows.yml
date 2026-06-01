@@ -1,0 +1,34 @@
+name: Build SuperTuxKart Windows
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure
+        shell: cmd
+        run: |
+          cd stk-code
+          mkdir cmake_build
+          cd cmake_build
+          cmake .. -G "Visual Studio 17 2022" -A x64
+
+      - name: Build
+        shell: cmd
+        run: |
+          cd stk-code\cmake_build
+          cmake --build . --config Release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: supertuxkart-windows-build
+          path: stk-code/cmake_build
