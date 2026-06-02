@@ -19,7 +19,7 @@ function writeCommand(action, target) {
   action = String(action || "boost").toLowerCase();
   target = String(target || "player").toLowerCase();
 
-  const allowedActions = new Set(["boost", "nitro", "slow", "anvil", "parachute", "shield", "bubblegum", "cake", "bowling", "plunger", "rubberball", "zipper", "swatter", "matamoscas", "banana", "gum", "bubblegum_obstacle"]);
+  const allowedActions = new Set(["boost", "nitro", "slow", "anvil", "parachute", "shield", "bubblegum", "cake", "bowling", "plunger", "rubberball", "zipper", "swatter", "matamoscas", "banana", "gum", "bubblegum_obstacle", "spin", "trompo", "freeze", "congelar", "reverse_controls", "reverse", "invert", "oil", "patinar", "teleport_random", "teleport_last", "teleport_leader", "swap_positions", "swap", "launch_up", "launch", "jump", "giant_kart", "giant", "tiny_kart", "tiny", "spawn_obstacle", "obstacle"]);
   if (!allowedActions.has(action)) {
     throw new Error("Accion no soportada todavia: " + action);
   }
@@ -48,6 +48,21 @@ http://127.0.0.1:${PORT}/swatter?kart=1
 http://127.0.0.1:${PORT}/banana?target=random
 http://127.0.0.1:${PORT}/gum?target=leader
 
+
+Nuevos v4:
+http://127.0.0.1:${PORT}/spin?target=random
+http://127.0.0.1:${PORT}/freeze?target=leader
+http://127.0.0.1:${PORT}/reverse_controls?kart=1
+http://127.0.0.1:${PORT}/oil?target=random
+http://127.0.0.1:${PORT}/teleport_random?kart=1
+http://127.0.0.1:${PORT}/teleport_leader?target=last
+http://127.0.0.1:${PORT}/teleport_last?target=leader
+http://127.0.0.1:${PORT}/swap_positions?target=leader
+http://127.0.0.1:${PORT}/launch_up?target=random
+http://127.0.0.1:${PORT}/giant_kart?kart=1
+http://127.0.0.1:${PORT}/tiny_kart?kart=1
+http://127.0.0.1:${PORT}/spawn_obstacle?target=leader
+
 Targets:
 player, leader, last, random, kart1, kart2, kart3...
 `);
@@ -62,7 +77,7 @@ player, leader, last, random, kart1, kart2, kart3...
 
     // Short aliases
     const alias = url.pathname.replace("/", "").toLowerCase();
-    if (["boost", "nitro", "slow", "anvil", "parachute", "shield", "bubblegum", "cake", "bowling", "plunger", "rubberball", "zipper", "swatter", "matamoscas", "banana", "gum", "bubblegum_obstacle"].includes(alias)) {
+    if (["boost", "nitro", "slow", "anvil", "parachute", "shield", "bubblegum", "cake", "bowling", "plunger", "rubberball", "zipper", "swatter", "matamoscas", "banana", "gum", "bubblegum_obstacle", "spin", "trompo", "freeze", "congelar", "reverse_controls", "reverse", "invert", "oil", "patinar", "teleport_random", "teleport_last", "teleport_leader", "swap_positions", "swap", "launch_up", "launch", "jump", "giant_kart", "giant", "tiny_kart", "tiny", "spawn_obstacle", "obstacle"].includes(alias)) {
       const target = url.searchParams.get("target") || (url.searchParams.get("kart") ? `kart${url.searchParams.get("kart")}` : "player");
       const result = writeCommand(alias, target);
       return send(res, 200, `OK ${result.action} -> ${result.target}\n${result.file}`);

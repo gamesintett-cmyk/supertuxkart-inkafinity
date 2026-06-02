@@ -104,6 +104,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 
 #if defined(WIN32) && !defined(__CYGWIN__)  && !defined(__MINGW32__)
@@ -262,6 +263,131 @@ namespace
         return inkaGetKartByIndex(0);
     }
 
+    struct InkaTimedEffect
+    {
+        int freeze_ticks;
+        int reverse_ticks;
+        int oil_ticks;
+        int scale_ticks;
+        float scale;
+        InkaTimedEffect()
+            : freeze_ticks(0), reverse_ticks(0), oil_ticks(0),
+              scale_ticks(0), scale(1.0f) {}
+    };
+
+    std::vector<InkaTimedEffect>& inkaEffects()
+    {
+        static std::vector<InkaTimedEffect> effects(64);
+        return effects;
+    }
+
+    InkaTimedEffect& inkaEffectFor(Kart* kart)
+    {
+        std::vector<InkaTimedEffect>& effects = inkaEffects();
+        unsigned int id = kart ? kart->getWorldKartId() : 0;
+        if (id >= effects.size()) effects.resize(id + 1);
+        return effects[id];
+    }
+
+    void inkaSetVelocity(Kart* kart, const Vec3& v)
+    {
+        if (kart && kart->getBody()) kart->getBody()->setLinearVelocity(v);
+    }
+
+    void inkaTeleportTo(Kart* kart, Kart* destination, float side_offset)
+    {
+        if (!kart || !destination || !kart->getBody()) return;
+        btTransform t = destination->getTrans();
+        Vec3 offset = t.getBasis().getColumn(0) * side_offset +
+                      t.getBasis().getColumn(1) * 1.0f;
+        t.setOrigin(t.getOrigin() + offset);
+        kart->getBody()->clearForces();
+        kart->getBody()->setLinearVelocity(Vec3(0.0f, 0.0f, 0.0f));
+        kart->getBody()->setAngularVelocity(Vec3(0.0f, 0.0f, 0.0f));
+        kart->getBody()->proceedToTransform(t);
+        kart->setTrans(t);
+    }
+
+    void inkaSwapKarts(Kart* a, Kart* b)
+    {
+        if (!a || !b || a == b || !a->getBody() || !b->getBody()) return;
+        btTransform ta = a->getTrans();
+        btTransform tb = b->getTrans();
+        Vec3 va = a->getBody()->getLinearVelocity();
+        Vec3 vb = b->getBody()->getLinearVelocity();
+        a->getBody()->proceedToTransform(tb);
+        b->getBody()->proceedToTransform(ta);
+        a->setTrans(tb);
+        b->setTrans(ta);
+        a->getBody()->setLinearVelocity(vb);
+        b->getBody()->setLinearVelocity(va);
+        a->getBody()->setAngularVelocity(Vec3(0.0f, 0.0f, 0.0f));
+        b->getBody()->setAngularVelocity(Vec3(0.0f, 0.0f, 0.0f));
+    }
+
+    void inkaDropObstacle(Kart* kart, int count)
+    {
+        ItemManager* im = Track::getCurrentTrack() ?
+            Track::getCurrentTrack()->getItemManager() : NULL;
+        if (!im || !kart) return;
+        for (int i = 0; i < count; i++)
+        {
+            im->dropNewItem((i % 2) == 0 ? Item::ITEM_BANANA : Item::ITEM_BUBBLEGUM, kart);
+        }
+    }
+
+    void inkaUpdateTimedEffects(Kart* kart, int ticks)
+    {
+        if (!kart) return;
+        InkaTimedEffect& e = inkaEffectFor(kart);
+
+        if (e.freeze_ticks > 0)
+        {
+            e.freeze_ticks -= ticks;
+            kart->setSlowdown(MaxSpeed::MS_DECREASE_SQUASH, 0.05f, stk_config->time2Ticks(0.1f));
+            if (kart->getBody())
+            {
+                kart->getBody()->clearForces();
+                kart->getBody()->setLinearVelocity(Vec3(0.0f, 0.0f, 0.0f));
+                kart->getBody()->setAngularVelocity(Vec3(0.0f, 0.0f, 0.0f));
+            }
+        }
+
+        if (e.reverse_ticks > 0)
+        {
+            e.reverse_ticks -= ticks;
+            if (kart->getBody())
+            {
+                Vec3 backward = kart->getTrans().getBasis().getColumn(2) * -12.0f;
+                backward.setY(kart->getBody()->getLinearVelocity().getY());
+                kart->getBody()->setLinearVelocity(backward);
+            }
+        }
+
+        if (e.oil_ticks > 0)
+        {
+            e.oil_ticks -= ticks;
+            if (kart->getBody())
+                kart->getBody()->setAngularVelocity(Vec3(0.0f, 10.0f, 0.0f));
+            kart->adjustSpeed(0.985f);
+        }
+
+#ifndef SERVER_ONLY
+        if (e.scale_ticks > 0)
+        {
+            e.scale_ticks -= ticks;
+            if (kart->getNode())
+                kart->getNode()->setScale(core::vector3df(e.scale, e.scale, e.scale));
+        }
+        else if (e.scale != 1.0f)
+        {
+            e.scale = 1.0f;
+            if (kart->getNode())
+                kart->getNode()->setScale(core::vector3df(1.0f, 1.0f, 1.0f));
+        }
+#endif
+    }
+
     void inkaApplyAction(Kart* kart, const std::string& action)
     {
         if (!kart) return;
@@ -364,6 +490,89 @@ namespace
             ItemManager* im = Track::getCurrentTrack() ? Track::getCurrentTrack()->getItemManager() : NULL;
             if (im) im->dropNewItem(Item::ITEM_BUBBLEGUM, kart);
             Log::info("InkaFinity", "Dropped bubblegum obstacle");
+        }
+        else if (action == "spin" || action == "trompo")
+        {
+            if (kart->getBody())
+                kart->getBody()->setAngularVelocity(Vec3(0.0f, 18.0f, 0.0f));
+            kart->adjustSpeed(0.70f);
+            Log::info("InkaFinity", "Applied spin");
+        }
+        else if (action == "freeze" || action == "congelar")
+        {
+            InkaTimedEffect& e = inkaEffectFor(kart);
+            e.freeze_ticks = stk_config->time2Ticks(3.0f);
+            Log::info("InkaFinity", "Applied freeze");
+        }
+        else if (action == "reverse_controls" || action == "reverse" || action == "invert")
+        {
+            // Works as a forced reverse/chaos effect for player and AI karts.
+            InkaTimedEffect& e = inkaEffectFor(kart);
+            e.reverse_ticks = stk_config->time2Ticks(3.0f);
+            Log::info("InkaFinity", "Applied reverse effect");
+        }
+        else if (action == "oil" || action == "patinar")
+        {
+            InkaTimedEffect& e = inkaEffectFor(kart);
+            e.oil_ticks = stk_config->time2Ticks(3.0f);
+            Log::info("InkaFinity", "Applied oil / slip effect");
+        }
+        else if (action == "teleport_random")
+        {
+            World* world = World::getWorld();
+            if (world && world->getNumKarts() > 1)
+            {
+                Kart* dest = inkaGetKartByIndex((unsigned int)(std::rand() % world->getNumKarts()));
+                if (dest == kart) dest = inkaGetKartByIndex((kart->getWorldKartId() + 1) % world->getNumKarts());
+                inkaTeleportTo(kart, dest, 4.0f);
+            }
+            Log::info("InkaFinity", "Teleported to random kart");
+        }
+        else if (action == "teleport_leader")
+        {
+            inkaTeleportTo(kart, inkaSelectTarget("leader"), 4.0f);
+            Log::info("InkaFinity", "Teleported to leader");
+        }
+        else if (action == "teleport_last")
+        {
+            inkaTeleportTo(kart, inkaSelectTarget("last"), 4.0f);
+            Log::info("InkaFinity", "Teleported to last");
+        }
+        else if (action == "swap_positions" || action == "swap")
+        {
+            Kart* other = inkaSelectTarget("leader");
+            if (other == kart) other = inkaSelectTarget("last");
+            inkaSwapKarts(kart, other);
+            Log::info("InkaFinity", "Swapped positions");
+        }
+        else if (action == "launch_up" || action == "launch" || action == "jump")
+        {
+            if (kart->getBody())
+            {
+                Vec3 v = kart->getBody()->getLinearVelocity();
+                v.setY(v.getY() + 22.0f);
+                kart->getBody()->setLinearVelocity(v);
+            }
+            Log::info("InkaFinity", "Launched kart upward");
+        }
+        else if (action == "giant_kart" || action == "giant")
+        {
+            InkaTimedEffect& e = inkaEffectFor(kart);
+            e.scale = 2.0f;
+            e.scale_ticks = stk_config->time2Ticks(8.0f);
+            Log::info("InkaFinity", "Applied giant kart visual scale");
+        }
+        else if (action == "tiny_kart" || action == "tiny")
+        {
+            InkaTimedEffect& e = inkaEffectFor(kart);
+            e.scale = 0.55f;
+            e.scale_ticks = stk_config->time2Ticks(8.0f);
+            Log::info("InkaFinity", "Applied tiny kart visual scale");
+        }
+        else if (action == "spawn_obstacle" || action == "obstacle")
+        {
+            inkaDropObstacle(kart, 5);
+            Log::info("InkaFinity", "Spawned obstacle pack");
         }
     }
 
@@ -1746,7 +1955,9 @@ void Kart::update(int ticks)
     // is used furthermore for engine power, camera distance etc
     updateSpeed();
 
-    // InkaFinity: poll one-shot external commands during any normal race.
+    // InkaFinity: poll one-shot external commands and update timed effects
+    // during any normal race.
+    inkaUpdateTimedEffects(this, ticks);
     inkaPollExternalCommand(this);
     // Make the restitution depend on speed: this avoids collision issues,
     // otherwise a collision with high speed can see a kart being push
