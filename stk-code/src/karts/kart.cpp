@@ -342,10 +342,19 @@ namespace
         if (!kart) return;
         InkaTimedEffect& e = inkaEffectFor(kart);
 
+        const bool was_frozen = e.freeze_ticks > 0;
+        const bool was_slowed = e.slow_ticks > 0;
+
         if (e.freeze_ticks > 0)
         {
             e.freeze_ticks -= ticks;
-            kart->setSlowdown(MaxSpeed::MS_DECREASE_SQUASH, 0.05f, stk_config->time2Ticks(0.1f));
+            if (e.freeze_ticks < 0) e.freeze_ticks = 0;
+
+            // Freeze should be temporary. Do not call setSlowdown here,
+            // because Kart::setSlowdown has no duration parameter and would
+            // leave the slowdown active until a reset. The timed squash is
+            // started once in inkaApplyAction(); here we only keep the kart
+            // physically stopped while the timer is active.
             if (kart->getBody())
             {
                 kart->getBody()->clearForces();
@@ -357,7 +366,18 @@ namespace
         if (e.slow_ticks > 0)
         {
             e.slow_ticks -= ticks;
-            kart->setSlowdown(MaxSpeed::MS_DECREASE_SQUASH, 0.55f, stk_config->time2Ticks(0.1f));
+            if (e.slow_ticks < 0) e.slow_ticks = 0;
+
+            // Extra drag while the timed squash/slowdown is active. This is
+            // intentionally mild so the kart recovers normally when ticks end.
+            kart->adjustSpeed(0.985f);
+        }
+
+        if ((was_frozen || was_slowed) && e.freeze_ticks <= 0 && e.slow_ticks <= 0)
+        {
+            // Ensure the visual squash is removed as soon as our own timed
+            // effect ends. The MaxSpeed slowdown itself is timed by setSquash.
+            kart->unsetSquash();
         }
 
         if (e.reverse_ticks > 0)
@@ -429,9 +449,11 @@ namespace
         {
             InkaTimedEffect& e = inkaEffectFor(kart);
             e.slow_ticks = stk_config->time2Ticks(duration_seconds);
-            kart->setSlowdown(MaxSpeed::MS_DECREASE_SQUASH,
-                0.55f,
-                stk_config->time2Ticks(0.1f));
+
+            // Use setSquash(time, slowdown) instead of setSlowdown().
+            // setSquash passes the duration to MaxSpeed, so the effect ends
+            // automatically after duration_seconds.
+            kart->setSquash(duration_seconds, 0.55f);
             Log::info("InkaFinity", "Applied timed slow");
         }
         else if (action == "anvil")
@@ -520,6 +542,16 @@ namespace
         {
             InkaTimedEffect& e = inkaEffectFor(kart);
             e.freeze_ticks = stk_config->time2Ticks(duration_seconds);
+
+            // Same idea as slow: start a timed squash once, then in the
+            // update loop we only keep velocity at zero while the timer runs.
+            kart->setSquash(duration_seconds, 0.05f);
+            if (kart->getBody())
+            {
+                kart->getBody()->clearForces();
+                kart->getBody()->setLinearVelocity(Vec3(0.0f, 0.0f, 0.0f));
+                kart->getBody()->setAngularVelocity(Vec3(0.0f, 0.0f, 0.0f));
+            }
             Log::info("InkaFinity", "Applied timed freeze");
         }
         else if (action == "reverse_controls" || action == "reverse" || action == "invert")
