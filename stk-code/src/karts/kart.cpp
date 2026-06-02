@@ -44,6 +44,7 @@
 #include "io/file_manager.hpp"
 #include "items/attachment.hpp"
 #include "items/item_manager.hpp"
+#include "items/item.hpp"
 #include "items/powerup.hpp"
 #include "items/projectile_manager.hpp"
 #include "karts/abstract_characteristic.hpp"
@@ -300,14 +301,21 @@ namespace
         else if (action == "parachute")
         {
             if (kart->getAttachment())
+            {
                 kart->getAttachment()->set(Attachment::ATTACH_PARACHUTE,
-                    stk_config->time2Ticks(5.0f));
+                    stk_config->time2Ticks(7.0f));
+            }
+            kart->adjustSpeed(0.60f);
             Log::info("InkaFinity", "Applied parachute");
         }
         else if (action == "shield" || action == "bubblegum")
         {
-            kart->setShieldTime(6.0f);
-            Log::info("InkaFinity", "Applied shield");
+            // Use the real bubblegum powerup so it shows the visual bubble shield,
+            // not only the invisible shield timer.
+            kart->setPowerup(PowerupManager::POWERUP_BUBBLEGUM, 1);
+            if (kart->getPowerup()) kart->getPowerup()->use();
+            kart->setShieldTime(8.0f);
+            Log::info("InkaFinity", "Applied bubblegum shield");
         }
         else if (action == "cake")
         {
@@ -338,6 +346,24 @@ namespace
             kart->setPowerup(PowerupManager::POWERUP_ZIPPER, 1);
             if (kart->getPowerup()) kart->getPowerup()->use();
             Log::info("InkaFinity", "Used zipper");
+        }
+        else if (action == "swatter" || action == "matamoscas")
+        {
+            kart->setPowerup(PowerupManager::POWERUP_SWATTER, 1);
+            if (kart->getPowerup()) kart->getPowerup()->use();
+            Log::info("InkaFinity", "Applied swatter");
+        }
+        else if (action == "banana")
+        {
+            ItemManager* im = Track::getCurrentTrack() ? Track::getCurrentTrack()->getItemManager() : NULL;
+            if (im) im->dropNewItem(Item::ITEM_BANANA, kart);
+            Log::info("InkaFinity", "Dropped banana obstacle");
+        }
+        else if (action == "gum" || action == "bubblegum_obstacle")
+        {
+            ItemManager* im = Track::getCurrentTrack() ? Track::getCurrentTrack()->getItemManager() : NULL;
+            if (im) im->dropNewItem(Item::ITEM_BUBBLEGUM, kart);
+            Log::info("InkaFinity", "Dropped bubblegum obstacle");
         }
     }
 
