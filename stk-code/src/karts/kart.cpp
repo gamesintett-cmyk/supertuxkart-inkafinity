@@ -266,12 +266,13 @@ namespace
     struct InkaTimedEffect
     {
         int freeze_ticks;
+        int slow_ticks;
         int reverse_ticks;
         int oil_ticks;
         int scale_ticks;
         float scale;
         InkaTimedEffect()
-            : freeze_ticks(0), reverse_ticks(0), oil_ticks(0),
+            : freeze_ticks(0), slow_ticks(0), reverse_ticks(0), oil_ticks(0),
               scale_ticks(0), scale(1.0f) {}
     };
 
@@ -353,6 +354,12 @@ namespace
             }
         }
 
+        if (e.slow_ticks > 0)
+        {
+            e.slow_ticks -= ticks;
+            kart->setSlowdown(MaxSpeed::MS_DECREASE_SQUASH, 0.55f, stk_config->time2Ticks(0.1f));
+        }
+
         if (e.reverse_ticks > 0)
         {
             e.reverse_ticks -= ticks;
@@ -388,9 +395,18 @@ namespace
 #endif
     }
 
-    void inkaApplyAction(Kart* kart, const std::string& action)
+    float inkaClampDuration(float seconds)
+    {
+        if (seconds <= 0.0f) return 5.0f;
+        if (seconds < 1.0f) return 1.0f;
+        if (seconds > 60.0f) return 60.0f;
+        return seconds;
+    }
+
+    void inkaApplyAction(Kart* kart, const std::string& action, float duration_seconds)
     {
         if (!kart) return;
+        duration_seconds = inkaClampDuration(duration_seconds);
 
         if (action == "boost")
         {
@@ -411,10 +427,12 @@ namespace
         }
         else if (action == "slow")
         {
+            InkaTimedEffect& e = inkaEffectFor(kart);
+            e.slow_ticks = stk_config->time2Ticks(duration_seconds);
             kart->setSlowdown(MaxSpeed::MS_DECREASE_SQUASH,
                 0.55f,
-                stk_config->time2Ticks(0.2f));
-            Log::info("InkaFinity", "Applied slow");
+                stk_config->time2Ticks(0.1f));
+            Log::info("InkaFinity", "Applied timed slow");
         }
         else if (action == "anvil")
         {
@@ -501,8 +519,8 @@ namespace
         else if (action == "freeze" || action == "congelar")
         {
             InkaTimedEffect& e = inkaEffectFor(kart);
-            e.freeze_ticks = stk_config->time2Ticks(3.0f);
-            Log::info("InkaFinity", "Applied freeze");
+            e.freeze_ticks = stk_config->time2Ticks(duration_seconds);
+            Log::info("InkaFinity", "Applied timed freeze");
         }
         else if (action == "reverse_controls" || action == "reverse" || action == "invert")
         {
@@ -600,12 +618,17 @@ namespace
 
         std::string action = inkaParam(line, "action");
         std::string target = inkaParam(line, "target");
+        std::string duration_raw = inkaParam(line, "duration");
 
         if (action.empty()) action = inkaLower(line);
         if (target.empty()) target = "player";
 
+        float duration_seconds = 5.0f;
+        if (!duration_raw.empty())
+            duration_seconds = (float)std::atof(duration_raw.c_str());
+
         Kart* kart = inkaSelectTarget(target);
-        inkaApplyAction(kart, action);
+        inkaApplyAction(kart, action, duration_seconds);
     }
 }
 
