@@ -127,6 +127,8 @@
 //   action=boost&target=player
 //   action=nitro&target=leader
 //   action=slow&target=random
+//   action=cake&target=player
+//   action=anvil&target=leader
 //
 // Supported targets:
 //   player, leader, last, random, kart1, kart2, kart3...
@@ -286,6 +288,56 @@ namespace
                 0.55f,
                 stk_config->time2Ticks(0.2f));
             Log::info("InkaFinity", "Applied slow");
+        }
+        else if (action == "anvil")
+        {
+            if (kart->getAttachment())
+                kart->getAttachment()->set(Attachment::ATTACH_ANVIL,
+                    stk_config->time2Ticks(5.0f));
+            kart->adjustSpeed(0.45f);
+            Log::info("InkaFinity", "Applied anvil");
+        }
+        else if (action == "parachute")
+        {
+            if (kart->getAttachment())
+                kart->getAttachment()->set(Attachment::ATTACH_PARACHUTE,
+                    stk_config->time2Ticks(5.0f));
+            Log::info("InkaFinity", "Applied parachute");
+        }
+        else if (action == "shield" || action == "bubblegum")
+        {
+            kart->setShieldTime(6.0f);
+            Log::info("InkaFinity", "Applied shield");
+        }
+        else if (action == "cake")
+        {
+            kart->setPowerup(PowerupManager::POWERUP_CAKE, 1);
+            if (kart->getPowerup()) kart->getPowerup()->use();
+            Log::info("InkaFinity", "Fired cake");
+        }
+        else if (action == "bowling")
+        {
+            kart->setPowerup(PowerupManager::POWERUP_BOWLING, 1);
+            if (kart->getPowerup()) kart->getPowerup()->use();
+            Log::info("InkaFinity", "Fired bowling");
+        }
+        else if (action == "plunger")
+        {
+            kart->setPowerup(PowerupManager::POWERUP_PLUNGER, 1);
+            if (kart->getPowerup()) kart->getPowerup()->use();
+            Log::info("InkaFinity", "Fired plunger");
+        }
+        else if (action == "rubberball")
+        {
+            kart->setPowerup(PowerupManager::POWERUP_RUBBERBALL, 1);
+            if (kart->getPowerup()) kart->getPowerup()->use();
+            Log::info("InkaFinity", "Fired rubberball");
+        }
+        else if (action == "zipper")
+        {
+            kart->setPowerup(PowerupManager::POWERUP_ZIPPER, 1);
+            if (kart->getPowerup()) kart->getPowerup()->use();
+            Log::info("InkaFinity", "Used zipper");
         }
     }
 

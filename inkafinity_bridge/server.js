@@ -19,7 +19,7 @@ function writeCommand(action, target) {
   action = String(action || "boost").toLowerCase();
   target = String(target || "player").toLowerCase();
 
-  const allowedActions = new Set(["boost", "nitro", "slow"]);
+  const allowedActions = new Set(["boost", "nitro", "slow", "anvil", "parachute", "shield", "bubblegum", "cake", "bowling", "plunger", "rubberball", "zipper"]);
   if (!allowedActions.has(action)) {
     throw new Error("Accion no soportada todavia: " + action);
   }
@@ -40,6 +40,10 @@ Ejemplos:
 http://127.0.0.1:${PORT}/action?action=boost&target=player
 http://127.0.0.1:${PORT}/action?action=nitro&target=leader
 http://127.0.0.1:${PORT}/action?action=slow&target=random
+http://127.0.0.1:${PORT}/action?action=anvil&target=leader
+http://127.0.0.1:${PORT}/action?action=cake&target=player
+http://127.0.0.1:${PORT}/action?action=bowling&target=random
+http://127.0.0.1:${PORT}/action?action=plunger&target=player
 
 Targets:
 player, leader, last, random, kart1, kart2, kart3...
@@ -55,7 +59,7 @@ player, leader, last, random, kart1, kart2, kart3...
 
     // Short aliases
     const alias = url.pathname.replace("/", "").toLowerCase();
-    if (["boost", "nitro", "slow"].includes(alias)) {
+    if (["boost", "nitro", "slow", "anvil", "parachute", "shield", "bubblegum", "cake", "bowling", "plunger", "rubberball", "zipper"].includes(alias)) {
       const target = url.searchParams.get("target") || "player";
       const result = writeCommand(alias, target);
       return send(res, 200, `OK ${result.action} -> ${result.target}\n${result.file}`);
