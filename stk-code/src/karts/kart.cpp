@@ -98,14 +98,232 @@
 #include <iostream>
 #include <limits>
 #include <cmath>
+#include <cstdlib>
+#include <cstdio>
+#include <fstream>
+#include <sstream>
+#include <string>
 
 
 #if defined(WIN32) && !defined(__CYGWIN__)  && !defined(__MINGW32__)
    // Disable warning for using 'this' in base member initializer list
 #  pragma warning(disable:4355)
+
 #endif
 
+// -----------------------------------------------------------------------------
+// InkaFinity external command bridge v1.
+// This keeps SuperTuxKart normal: you open any race manually, and during the
+// race a local bridge writes one command file. Kart 0 polls and applies it to
+// the selected kart.
+//
+// Default command file:
+//   %TEMP%\stk_inkafinity_command.txt
+//
+// Optional override:
+//   STK_INKAFINITY_COMMAND_FILE=C:\path\command.txt
+//
+// Supported command format:
+//   action=boost&target=player
+//   action=nitro&target=leader
+//   action=slow&target=random
+//
+// Supported targets:
+//   player, leader, last, random, kart1, kart2, kart3...
+namespace
+{
+    std::string inkaTrim(const std::string& s)
+    {
+        size_t a = 0;
+        while (a < s.size() && (s[a] == ' ' || s[a] == '\t' ||
+               s[a] == '\r' || s[a] == '\n')) a++;
+        size_t b = s.size();
+        while (b > a && (s[b - 1] == ' ' || s[b - 1] == '\t' ||
+               s[b - 1] == '\r' || s[b - 1] == '\n')) b--;
+        return s.substr(a, b - a);
+    }
+
+    std::string inkaLower(std::string s)
+    {
+        for (size_t i = 0; i < s.size(); i++)
+        {
+            if (s[i] >= 'A' && s[i] <= 'Z') s[i] = char(s[i] - 'A' + 'a');
+        }
+        return s;
+    }
+
+    std::string inkaCommandFile()
+    {
+        const char* forced = std::getenv("STK_INKAFINITY_COMMAND_FILE");
+        if (forced && forced[0]) return std::string(forced);
+
+        const char* temp = std::getenv("TEMP");
+        if (!temp || !temp[0]) temp = std::getenv("TMP");
+        if (!temp || !temp[0]) return "stk_inkafinity_command.txt";
+
+        std::string path(temp);
+        if (!path.empty() && path[path.size() - 1] != '\\' &&
+            path[path.size() - 1] != '/')
+            path += "\\";
+        path += "stk_inkafinity_command.txt";
+        return path;
+    }
+
+    std::string inkaParam(const std::string& line, const std::string& key)
+    {
+        std::stringstream ss(line);
+        std::string part;
+        while (std::getline(ss, part, '&'))
+        {
+            size_t eq = part.find('=');
+            if (eq == std::string::npos) continue;
+            std::string k = inkaLower(inkaTrim(part.substr(0, eq)));
+            std::string v = inkaTrim(part.substr(eq + 1));
+            if (k == key) return inkaLower(v);
+        }
+        return "";
+    }
+
+    Kart* inkaGetKartByIndex(unsigned int index)
+    {
+        World* world = World::getWorld();
+        if (!world) return NULL;
+        if (index >= world->getNumKarts()) return NULL;
+        return dynamic_cast<Kart*>(world->getKart(index));
+    }
+
+    Kart* inkaSelectTarget(const std::string& target)
+    {
+        World* world = World::getWorld();
+        if (!world || world->getNumKarts() == 0) return NULL;
+
+        if (target == "player")
+        {
+            for (unsigned int i = 0; i < world->getNumKarts(); i++)
+            {
+                Kart* k = inkaGetKartByIndex(i);
+                if (k && k->getType() == RaceManager::KT_PLAYER)
+                    return k;
+            }
+            return inkaGetKartByIndex(0);
+        }
+
+        if (target == "leader")
+        {
+            Kart* best = NULL;
+            int best_pos = 999999;
+            for (unsigned int i = 0; i < world->getNumKarts(); i++)
+            {
+                Kart* k = inkaGetKartByIndex(i);
+                if (!k) continue;
+                if (k->getPosition() < best_pos)
+                {
+                    best_pos = k->getPosition();
+                    best = k;
+                }
+            }
+            return best ? best : inkaGetKartByIndex(0);
+        }
+
+        if (target == "last")
+        {
+            Kart* worst = NULL;
+            int worst_pos = -999999;
+            for (unsigned int i = 0; i < world->getNumKarts(); i++)
+            {
+                Kart* k = inkaGetKartByIndex(i);
+                if (!k) continue;
+                if (k->getPosition() > worst_pos)
+                {
+                    worst_pos = k->getPosition();
+                    worst = k;
+                }
+            }
+            return worst ? worst : inkaGetKartByIndex(0);
+        }
+
+        if (target == "random")
+        {
+            unsigned int n = world->getNumKarts();
+            if (n == 0) return NULL;
+            return inkaGetKartByIndex((unsigned int)(std::rand() % n));
+        }
+
+        if (target.size() > 4 && target.substr(0, 4) == "kart")
+        {
+            int number = std::atoi(target.substr(4).c_str());
+            if (number <= 0) number = 1;
+            return inkaGetKartByIndex((unsigned int)(number - 1));
+        }
+
+        return inkaGetKartByIndex(0);
+    }
+
+    void inkaApplyAction(Kart* kart, const std::string& action)
+    {
+        if (!kart) return;
+
+        if (action == "boost")
+        {
+            kart->instantSpeedIncrease(MaxSpeed::MS_INCREASE_ZIPPER,
+                18.0f, 12.0f, 450.0f,
+                stk_config->time2Ticks(2.5f),
+                stk_config->time2Ticks(1.0f));
+            Log::info("InkaFinity", "Applied boost");
+        }
+        else if (action == "nitro")
+        {
+            kart->setEnergy(kart->getEnergy() + 50.0f);
+            kart->instantSpeedIncrease(MaxSpeed::MS_INCREASE_NITRO,
+                12.0f, 8.0f, 300.0f,
+                stk_config->time2Ticks(2.0f),
+                stk_config->time2Ticks(1.0f));
+            Log::info("InkaFinity", "Applied nitro");
+        }
+        else if (action == "slow")
+        {
+            kart->setSlowdown(MaxSpeed::MS_DECREASE_SQUASH,
+                0.55f,
+                stk_config->time2Ticks(0.2f));
+            Log::info("InkaFinity", "Applied slow");
+        }
+    }
+
+    void inkaPollExternalCommand(Kart* polling_kart)
+    {
+        if (!polling_kart) return;
+
+        // Only one kart should poll, otherwise the same command can be applied
+        // several times in one frame.
+        if (polling_kart->getWorldKartId() != 0) return;
+
+        std::string path = inkaCommandFile();
+        std::ifstream file(path.c_str());
+        if (!file.good()) return;
+
+        std::string line;
+        std::getline(file, line);
+        file.close();
+
+        // Delete immediately so the command is one-shot.
+        std::remove(path.c_str());
+
+        line = inkaTrim(line);
+        if (line.empty()) return;
+
+        std::string action = inkaParam(line, "action");
+        std::string target = inkaParam(line, "target");
+
+        if (action.empty()) action = inkaLower(line);
+        if (target.empty()) target = "player";
+
+        Kart* kart = inkaSelectTarget(target);
+        inkaApplyAction(kart, action);
+    }
+}
+
 /** The kart constructor.
+
  *  \param ident  The identifier for the kart model to use.
  *  \param position The position (or rank) for this kart (between 1 and
  *         number of karts). This is used to determine the start position.
@@ -1449,6 +1667,9 @@ void Kart::update(int ticks)
     // Update the locally maintained speed of the kart (m_speed), which
     // is used furthermore for engine power, camera distance etc
     updateSpeed();
+
+    // InkaFinity: poll one-shot external commands during any normal race.
+    inkaPollExternalCommand(this);
     // Make the restitution depend on speed: this avoids collision issues,
     // otherwise a collision with high speed can see a kart being push
     // high up in the air (and out of control). So for higher speed we

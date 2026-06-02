@@ -1,0 +1,10 @@
+{
+  "name": "stk-inkafinity-bridge",
+  "version": "1.0.0",
+  "description": "Local bridge for SuperTuxKart InkaFinity commands",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {}
+}
